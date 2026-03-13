@@ -3,118 +3,412 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat con la Base de Datos de Recepción</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8"></script>
+    <title>Consulta de Horarios - HHU</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .chat-container { width: 90%; max-width: 600px; height: 80vh; background: white; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1 ); display: flex; flex-direction: column; }
-        #chat-window { flex-grow: 1; overflow-y: auto; padding: 20px; }
-        .message { margin-bottom: 15px; padding: 10px 15px; border-radius: 18px; max-width: 80%; line-height: 1.4; }
-        .user-message { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
-        .ia-message { background-color: #e9e9eb; color: #333; align-self: flex-start; }
-        .error-message { background-color: #ffebee; color: #c62828; border: 1px solid #c62828; }
-        #input-area { display: flex; padding: 15px; border-top: 1px solid #ddd; }
-        #user-input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 20px; font-size: 16px; }
-        #send-button { background: #007bff; color: white; border: none; border-radius: 50%; width: 45px; height: 45px; margin-left: 10px; font-size: 20px; cursor: pointer; }
-        pre { background-color: #2d2d2d; color: #f8f8f2; padding: 10px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; }
+        /* --- ESTILOS GENERALES --- */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #f0f2f5; 
+            color: #1c1c1e; 
+            margin: 0; 
+        }
+        .page-container { 
+            padding: 1.5rem; 
+        }
+        .card { 
+            background: white; 
+            padding: 1.5rem; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1 ); 
+        }
+        .hidden { 
+            display: none !important; 
+        }
+
+        /* --- CABECERA Y CONTROLES --- */
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 1.5rem; 
+            flex-wrap: wrap; 
+            gap: 1rem; 
+        }
+        .calendar-header-title { 
+            display: flex; 
+            align-items: center; 
+            gap: 1rem; 
+        }
+        .calendar-header-title h1 { 
+            margin: 0; 
+            font-size: 1.75rem; 
+        }
+        .month-nav-button { 
+            background: none; 
+            border: none; 
+            cursor: pointer; 
+            font-size: 2rem; 
+            color: #007aff; 
+            padding: 0 0.5rem; 
+        }
+        .controls { 
+            display: flex; 
+            align-items: center; 
+            gap: 1rem; 
+            flex-wrap: wrap;
+        }
+        .selector {
+            font-size: 1rem;
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            border: 1px solid #c7c7cc;
+            background-color: white;
+            cursor: pointer;
+        }
+
+        /* --- CALENDARIO --- */
+        .calendar-container { 
+            max-width: 1100px; 
+            margin: 0 auto; 
+        }
+        .calendario-grid { 
+            display: grid; 
+            grid-template-columns: repeat(7, 1fr); 
+            gap: 0.5rem; 
+        }
+        .dia-semana { 
+            font-weight: 600; 
+            color: #6c6c70; 
+            text-align: center; 
+            padding: 0.5rem 0; 
+        }
+        .dia-calendario { 
+            border: 1px solid #e5e5ea; 
+            min-height: 100px; 
+            padding: 0.5rem; 
+            border-radius: 6px; 
+            transition: background-color 0.2s; 
+        }
+        .dia-numero { 
+            font-weight: 500; 
+        }
+        .dia-vacio { 
+            border: none; 
+            background-color: transparent; 
+        }
+        .dia-resaltado {
+            background-color: #cce7ff; /* Celeste */
+            border-color: #007aff;
+            cursor: pointer;
+        }
+        .dia-resaltado:hover {
+            background-color: #b3d9ff;
+        }
+        .turno-indicator {
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-top: 0.5rem;
+            padding: 2px 4px;
+            border-radius: 4px;
+            color: white;
+            text-align: center;
+        }
+        .turno-dia { background-color: #ff9500; } /* Naranja */
+        .turno-noche { background-color: #5856d6; } /* Púrpura */
+
+        /* --- MODAL (POPUP) DE DETALLES --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            width: clamp(300px, 90vw, 500px);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e5e5ea;
+            padding-bottom: 1rem;
+            margin-bottom: 1rem;
+        }
+        .modal-header h2 { margin: 0; }
+        .modal-close-button {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6c6c70;
+        }
+        #modal-turno-propio {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        #modal-lista-companeros h3 {
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+        #modal-lista-companeros ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        #modal-lista-companeros li {
+            padding: 0.5rem;
+            border-bottom: 1px solid #f2f2f7;
+        }
     </style>
 </head>
 <body>
 
-<div class="chat-container">
-    <div id="chat-window">
-        <div class="message ia-message">Hola, soy tu asistente de base de datos. ¿Qué información necesitas de la tabla de registros?</div>
+    <div id="calendar-view" class="page-container">
+        <div class="calendar-container card">
+            <div class="header">
+                <div class="calendar-header-title">
+                    <button id="prev-month-button" class="month-nav-button">◀</button>
+                    <h1 id="calendar-title"></h1>
+                    <button id="next-month-button" class="month-nav-button">▶</button>
+                </div>
+                <div class="controls">
+                    <select id="selector-tipo-personal" class="selector">
+                        <option value="Enfermero">Enfermeros</option>
+                        <option value="Técnico">Técnicos</option>
+                    </select>
+                    <select id="selector-nombre" class="selector">
+                        <option value="">-- Busque su nombre --</option>
+                    </select>
+                </div>
+            </div>
+            <div id="calendario-grid" class="calendario-grid">
+                <div class="dia-semana">LUN</div><div class="dia-semana">MAR</div><div class="dia-semana">MIÉ</div><div class="dia-semana">JUE</div><div class="dia-semana">VIE</div><div class="dia-semana">SÁB</div><div class="dia-semana">DOM</div>
+            </div>
+        </div>
     </div>
-    <div id="input-area">
-        <input type="text" id="user-input" placeholder="Ej: busca al paciente Juan Perez...">
-        <button id="send-button">→</button>
+
+    <!-- MODAL DE DETALLES DEL DÍA -->
+    <div id="detalle-dia-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title"></h2>
+                <button id="modal-close" class="modal-close-button">&times;</button>
+            </div>
+            <div id="modal-body">
+                <p id="modal-turno-propio"></p>
+                <div id="modal-lista-companeros">
+                    <h3>Compañeros de Guardia:</h3>
+                    <ul></ul>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
 
-<script>
-    // Tus claves de Supabase (¡estas son públicas y seguras de poner aquí!)
-    const supabaseUrl = 'https://esiklpxyectbekxvajnw.supabase.co';
-    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzaWtscHh5ZWN0YmVreHZham53Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2OTI1MjEsImV4cCI6MjA3NzI2ODUyMX0.mtQnqUrTmhmN1DQxOAUnGpizhYZobStHDH0cz_XfKGU';
-    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey );
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1. CONFIGURACIÓN
+            const supabaseUrl = 'https://rrubzwdrsuyjntoejmew.supabase.co';
+            const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJydWJ6d2Ryc3V5am50b2VqbWV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxNDgxMzksImV4cCI6MjA4NzcyNDEzOX0.2skpmRdeb43Ck0IUAKyBcW5g3KAHPf7_st-QaAJ2K0E';
+            const supabase = window.supabase.createClient(supabaseUrl, supabaseKey );
 
-    const chatWindow = document.getElementById('chat-window');
-    const userInput = document.getElementById('user-input');
-    const sendButton = document.getElementById('send-button');
+            // Elementos del DOM
+            const selectorTipo = document.getElementById('selector-tipo-personal');
+            const selectorNombre = document.getElementById('selector-nombre');
+            const grid = document.getElementById('calendario-grid');
+            const calendarTitle = document.getElementById('calendar-title');
+            const prevMonthBtn = document.getElementById('prev-month-button');
+            const nextMonthBtn = document.getElementById('next-month-button');
+            const modal = document.getElementById('detalle-dia-modal');
+            const modalCloseBtn = document.getElementById('modal-close');
 
-    sendButton.addEventListener('click', handleUserMessage);
-    userInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            handleUserMessage();
-        }
-    });
+            let currentDate = new Date(2026, 2, 1); // Inicia en Marzo 2026
+            let personalCache = []; // Caché para no pedir la lista de personal cada vez
 
-    function addMessage(text, type, isRawJson = false) {
-        const messageDiv = document.createElement('div');
-        messageDiv.classList.add('message', type);
-        if (isRawJson) {
-            messageDiv.innerHTML = `<pre>${text}</pre>`;
-        } else {
-            messageDiv.textContent = text;
-        }
-        chatWindow.appendChild(messageDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-    }
+            // 2. LÓGICA PRINCIPAL
+            
+            // Carga la lista de nombres según el tipo de personal seleccionado
+            const cargarNombres = async () => {
+                const tipo = selectorTipo.value;
+                selectorNombre.innerHTML = '<option value="">Cargando...</option>';
+                
+                try {
+                    const { data, error } = await supabase
+                        .from('personal')
+                        .select('id, nombre_completo')
+                        .eq('tipo_personal', tipo)
+                        .order('nombre_completo', { ascending: true });
 
-    async function handleUserMessage() {
-        const pregunta = userInput.value.trim();
-        if (!pregunta) return;
+                    if (error) throw error;
+                    
+                    personalCache = data; // Guardar en caché
+                    selectorNombre.innerHTML = '<option value="">-- Busque su nombre --</option>';
+                    data.forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = p.id;
+                        option.textContent = p.nombre_completo;
+                        selectorNombre.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error("Error cargando nombres:", error);
+                    selectorNombre.innerHTML = '<option value="">Error al cargar</option>';
+                }
+            };
 
-        addMessage(pregunta, 'user-message');
-        userInput.value = '';
-        addMessage('Pensando...', 'ia-message', false);
+            // Dibuja el calendario para el mes actual
+            const renderCalendar = async () => {
+                // Limpia el calendario anterior
+                grid.querySelectorAll('.dia-calendario, .dia-vacio').forEach(el => el.remove());
+                
+                const mes = currentDate.getMonth();
+                const ano = currentDate.getFullYear();
+                
+                const nombreMes = new Intl.DateTimeFormat('es-ES', { month: 'long' }).format(currentDate);
+                calendarTitle.textContent = `${nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)} ${ano}`;
 
-        try {
-            // 1. Llamar a la Edge Function para que la IA convierta la pregunta en un plan JSON
-            const { data: plan, error: planError } = await supabase.functions.invoke('chat-con-ia', {
-                body: { pregunta },
+                // Calcula el offset para el primer día
+                const primerDiaDelMes = new Date(ano, mes, 1).getDay();
+                const offset = (primerDiaDelMes === 0) ? 6 : primerDiaDelMes - 1; 
+                for (let i = 0; i < offset; i++) {
+                    grid.appendChild(document.createElement('div')).classList.add('dia-vacio');
+                }
+
+                // Obtiene los horarios de la persona seleccionada para el mes actual
+                const personaId = selectorNombre.value;
+                let horariosPersona = [];
+                if (personaId) {
+                    const primerDiaMes = `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
+                    const ultimoDiaMes = new Date(ano, mes + 1, 0).toISOString().split('T')[0];
+                    
+                    const { data, error } = await supabase
+                        .from('horarios')
+                        .select('fecha, codigo_turno_id')
+                        .eq('personal_id', personaId)
+                        .gte('fecha', primerDiaMes)
+                        .lte('fecha', ultimoDiaMes);
+                    
+                    if (error) console.error("Error obteniendo horarios:", error);
+                    else horariosPersona = data;
+                }
+
+                // Crea las celdas de los días
+                const diasEnMes = new Date(ano, mes + 1, 0).getDate();
+                for (let dia = 1; dia <= diasEnMes; dia++) {
+                    const celda = document.createElement('div');
+                    celda.className = 'dia-calendario';
+                    celda.innerHTML = `<div class="dia-numero">${dia}</div>`;
+                    
+                    const horarioDelDia = horariosPersona.find(h => new Date(h.fecha).getUTCDate() === dia);
+                    
+                    if (horarioDelDia) {
+                        celda.classList.add('dia-resaltado');
+                        
+                        const esTurnoDia = ['D3', 'M3', 'R3', 'T5'].includes(horarioDelDia.codigo_turno_id);
+                        const indicador = document.createElement('div');
+                        indicador.className = 'turno-indicator';
+                        if (esTurnoDia) {
+                            indicador.classList.add('turno-dia');
+                            indicador.textContent = 'DÍA';
+                        } else {
+                            indicador.classList.add('turno-noche');
+                            indicador.textContent = 'NOCHE';
+                        }
+                        celda.appendChild(indicador);
+                        
+                        // Añade el evento para mostrar detalles
+                        celda.onclick = () => mostrarDetalles(dia, mes, ano);
+                    }
+                    
+                    grid.appendChild(celda);
+                }
+            };
+
+            // Muestra el popup con los detalles del día
+            const mostrarDetalles = async (dia, mes, ano) => {
+                const personaIdSeleccionada = selectorNombre.value;
+                const fecha = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+                
+                document.getElementById('modal-title').textContent = `Detalles del ${dia} de ${new Intl.DateTimeFormat('es-ES', { month: 'long' }).format(currentDate)}`;
+                const listaCompaneros = document.querySelector('#modal-lista-companeros ul');
+                listaCompaneros.innerHTML = '<li>Cargando...</li>';
+                modal.classList.remove('hidden');
+
+                try {
+                    const { data: horarios, error } = await supabase
+                        .from('horarios')
+                        .select('codigo_turno_id, personal(id, nombre_completo)')
+                        .eq('fecha', fecha)
+                        .eq('personal.tipo_personal', selectorTipo.value);
+
+                    if (error) throw error;
+
+                    const turnoPropio = horarios.find(h => h.personal.id === personaIdSeleccionada);
+                    const esTurnoDia = ['D3', 'M3', 'R3', 'T5'].includes(turnoPropio.codigo_turno_id);
+                    document.getElementById('modal-turno-propio').textContent = `Tu turno: ${esTurnoDia ? 'DÍA' : 'NOCHE'}`;
+
+                    listaCompaneros.innerHTML = '';
+                    horarios
+                        .filter(h => h.personal.id !== personaIdSeleccionada) // Excluirse a sí mismo
+                        .forEach(h => {
+                            const li = document.createElement('li');
+                            li.textContent = h.personal.nombre_completo;
+                            listaCompaneros.appendChild(li);
+                        });
+                    
+                    if (listaCompaneros.children.length === 0) {
+                        listaCompaneros.innerHTML = '<li>No hay otros compañeros registrados para este día.</li>';
+                    }
+
+                } catch (error) {
+                    console.error("Error mostrando detalles:", error);
+                    listaCompaneros.innerHTML = `<li>Error al cargar compañeros: ${error.message}</li>`;
+                }
+            };
+
+            // 3. EVENTOS
+            selectorTipo.addEventListener('change', () => {
+                cargarNombres();
+                renderCalendar(); // Limpia el calendario si se cambia de tipo
             });
 
-            if (planError) throw planError;
-            if (plan.error) throw new Error(plan.error);
-            
-            // Mostramos el plan que generó la IA (muy útil para depurar)
-            document.querySelector('.ia-message:last-child').remove(); // Quita el "Pensando..."
-            addMessage('Plan de la IA:\n' + JSON.stringify(plan, null, 2), 'ia-message', true);
+            selectorNombre.addEventListener('change', renderCalendar);
 
-            // 2. Construir y ejecutar la consulta de Supabase basada en el plan de la IA
-            let query = supabase.from(plan.tabla).select(plan.columnas);
+            prevMonthBtn.addEventListener('click', () => {
+                currentDate.setMonth(currentDate.getMonth() - 1);
+                renderCalendar();
+            });
 
-            if (plan.filtros && plan.filtros.length > 0) {
-                plan.filtros.forEach(filtro => {
-                    query = query[filtro.operador](filtro.columna, filtro.valor);
-                });
-            }
-            
-            if (plan.accion === 'count') {
-                query = query.select('*', { count: 'exact', head: true });
-            }
+            nextMonthBtn.addEventListener('click', () => {
+                currentDate.setMonth(currentDate.getMonth() + 1);
+                renderCalendar();
+            });
 
-            const { data: resultados, error: dbError, count } = await query;
+            modalCloseBtn.addEventListener('click', () => modal.classList.add('hidden'));
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.add('hidden'); // Cierra si se hace clic fuera del contenido
+            });
 
-            if (dbError) throw dbError;
+            // 4. INICIALIZACIÓN
+            const init = () => {
+                cargarNombres();
+                renderCalendar();
+            };
 
-            // 3. Mostrar los resultados al usuario
-            if (plan.accion === 'count') {
-                addMessage(`Respuesta: Se encontraron ${count} registros.`, 'ia-message');
-            } else if (resultados.length === 0) {
-                addMessage('No encontré resultados para tu consulta.', 'ia-message');
-            } else {
-                const respuestaFormateada = 'Resultados:\n' + JSON.stringify(resultados, null, 2);
-                addMessage(respuestaFormateada, 'ia-message', true);
-            }
-
-        } catch (error) {
-            console.error('Error en el proceso:', error);
-            document.querySelector('.ia-message:last-child').remove(); // Quita el "Pensando..."
-            addMessage(`Error: ${error.message}`, 'error-message');
-        }
-    }
-</script>
-
+            init();
+        });
+    </script>
 </body>
 </html>
