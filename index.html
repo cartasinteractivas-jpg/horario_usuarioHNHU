@@ -235,26 +235,21 @@
             const modal = document.getElementById('detalle-dia-modal');
             const modalCloseBtn = document.getElementById('modal-close');
 
-            let currentDate = new Date(2026, 2, 1); // Inicia en Marzo 2026
-            let personalCache = []; // Caché para no pedir la lista de personal cada vez
+            let currentDate = new Date(2026, 2, 1);
+            let personalCache = [];
 
             // 2. LÓGICA PRINCIPAL
-            
-            // Carga la lista de nombres según el tipo de personal seleccionado
             const cargarNombres = async () => {
                 const tipo = selectorTipo.value;
                 selectorNombre.innerHTML = '<option value="">Cargando...</option>';
-                
                 try {
                     const { data, error } = await supabase
                         .from('personal')
                         .select('id, nombre_completo')
                         .eq('tipo_personal', tipo)
                         .order('nombre_completo', { ascending: true });
-
                     if (error) throw error;
-                    
-                    personalCache = data; // Guardar en caché
+                    personalCache = data;
                     selectorNombre.innerHTML = '<option value="">-- Busque su nombre --</option>';
                     data.forEach(p => {
                         const option = document.createElement('option');
@@ -268,54 +263,39 @@
                 }
             };
 
-            // Dibuja el calendario para el mes actual
             const renderCalendar = async () => {
-                // Limpia el calendario anterior
                 grid.querySelectorAll('.dia-calendario, .dia-vacio').forEach(el => el.remove());
-                
                 const mes = currentDate.getMonth();
                 const ano = currentDate.getFullYear();
-                
                 const nombreMes = new Intl.DateTimeFormat('es-ES', { month: 'long' }).format(currentDate);
                 calendarTitle.textContent = `${nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)} ${ano}`;
-
-                // Calcula el offset para el primer día
                 const primerDiaDelMes = new Date(ano, mes, 1).getDay();
-                const offset = (primerDiaDelMes === 0) ? 6 : primerDiaDelMes - 1; 
+                const offset = (primerDiaDelMes === 0) ? 6 : primerDiaDelMes - 1;
                 for (let i = 0; i < offset; i++) {
                     grid.appendChild(document.createElement('div')).classList.add('dia-vacio');
                 }
-
-                // Obtiene los horarios de la persona seleccionada para el mes actual
                 const personaId = selectorNombre.value;
                 let horariosPersona = [];
                 if (personaId) {
                     const primerDiaMes = `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
                     const ultimoDiaMes = new Date(ano, mes + 1, 0).toISOString().split('T')[0];
-                    
                     const { data, error } = await supabase
                         .from('horarios')
                         .select('fecha, codigo_turno_id')
                         .eq('personal_id', personaId)
                         .gte('fecha', primerDiaMes)
                         .lte('fecha', ultimoDiaMes);
-                    
                     if (error) console.error("Error obteniendo horarios:", error);
                     else horariosPersona = data;
                 }
-
-                // Crea las celdas de los días
                 const diasEnMes = new Date(ano, mes + 1, 0).getDate();
                 for (let dia = 1; dia <= diasEnMes; dia++) {
                     const celda = document.createElement('div');
                     celda.className = 'dia-calendario';
                     celda.innerHTML = `<div class="dia-numero">${dia}</div>`;
-                    
                     const horarioDelDia = horariosPersona.find(h => new Date(h.fecha).getUTCDate() === dia);
-                    
                     if (horarioDelDia) {
                         celda.classList.add('dia-resaltado');
-                        
                         const esTurnoDia = ['D3', 'M3', 'R3', 'T5'].includes(horarioDelDia.codigo_turno_id);
                         const indicador = document.createElement('div');
                         indicador.className = 'turno-indicator';
@@ -327,16 +307,13 @@
                             indicador.textContent = 'NOCHE';
                         }
                         celda.appendChild(indicador);
-                        
-                        // Añade el evento para mostrar detalles
                         celda.onclick = () => mostrarDetalles(dia, mes, ano);
                     }
-                    
                     grid.appendChild(celda);
                 }
             };
 
-            // Muestra el popup con los detalles del día
+            // --- FUNCIÓN mostrarDetalles() CORREGIDA ---
             const mostrarDetalles = async (dia, mes, ano) => {
                 const personaIdSeleccionada = selectorNombre.value;
                 const fecha = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
@@ -347,7 +324,7 @@
                 modal.classList.remove('hidden');
 
                 try {
-                    const { data: horarios, error } = await supabase
+                    const { data, error } = await supabase
                         .from('horarios')
                         .select('codigo_turno_id, personal(id, nombre_completo)')
                         .eq('fecha', fecha)
@@ -355,12 +332,22 @@
 
                     if (error) throw error;
 
-                    const turnoPropio = horarios.find(h => h.personal.id === personaIdSeleccionada);
-                    const esTurnoDia = ['D3', 'M3', 'R3', 'T5'].includes(turnoPropio.codigo_turno_id);
-                    document.getElementById('modal-turno-propio').textContent = `Tu turno: ${esTurnoDia ? 'DÍA' : 'NOCHE'}`;
+                    // **LA CORRECCIÓN ESTÁ AQUÍ**
+                    // Filtramos los registros que no tienen un objeto 'personal' válido
+                    const horariosValidos = data.filter(h => h.personal);
+
+                    const turnoPropio = horariosValidos.find(h => h.personal.id === personaIdSeleccionada);
+                    
+                    // Verificamos que se encontró el turno de la persona seleccionada
+                    if (turnoPropio) {
+                        const esTurnoDia = ['D3', 'M3', 'R3', 'T5'].includes(turnoPropio.codigo_turno_id);
+                        document.getElementById('modal-turno-propio').textContent = `Tu turno: ${esTurnoDia ? 'DÍA' : 'NOCHE'}`;
+                    } else {
+                        document.getElementById('modal-turno-propio').textContent = 'No se encontró tu turno específico para este día.';
+                    }
 
                     listaCompaneros.innerHTML = '';
-                    horarios
+                    horariosValidos
                         .filter(h => h.personal.id !== personaIdSeleccionada) // Excluirse a sí mismo
                         .forEach(h => {
                             const li = document.createElement('li');
@@ -381,24 +368,20 @@
             // 3. EVENTOS
             selectorTipo.addEventListener('change', () => {
                 cargarNombres();
-                renderCalendar(); // Limpia el calendario si se cambia de tipo
+                renderCalendar();
             });
-
             selectorNombre.addEventListener('change', renderCalendar);
-
             prevMonthBtn.addEventListener('click', () => {
                 currentDate.setMonth(currentDate.getMonth() - 1);
                 renderCalendar();
             });
-
             nextMonthBtn.addEventListener('click', () => {
                 currentDate.setMonth(currentDate.getMonth() + 1);
                 renderCalendar();
             });
-
             modalCloseBtn.addEventListener('click', () => modal.classList.add('hidden'));
             modal.addEventListener('click', (e) => {
-                if (e.target === modal) modal.classList.add('hidden'); // Cierra si se hace clic fuera del contenido
+                if (e.target === modal) modal.classList.add('hidden');
             });
 
             // 4. INICIALIZACIÓN
@@ -406,7 +389,6 @@
                 cargarNombres();
                 renderCalendar();
             };
-
             init();
         });
     </script>
